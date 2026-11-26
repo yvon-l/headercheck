@@ -4,8 +4,18 @@
 // =========================
 // Constants
 // =========================
-const HC_HISTORY_KEY = "yl_history";
+const HC_HISTORY_KEY = "hc_history";
 const HC_MAX_HISTORY = 10;
+
+// Carry history and theme over from the old storage key names (0.3.0 and earlier).
+async function migrateKeys() {
+  const old = await chrome.storage.local.get(["yl_history", "yl_theme"]);
+  const next = {};
+  if (old.yl_history) next.hc_history = old.yl_history;
+  if (old.yl_theme) next.hc_theme = old.yl_theme;
+  if (Object.keys(next).length) await chrome.storage.local.set(next);
+  await chrome.storage.local.remove(["yl_history", "yl_theme"]);
+}
 
 // =========================
 /* Theme */
@@ -16,8 +26,9 @@ const themeIconSpan = document.getElementById("themeIcon");
 const themeLabelSpan = document.getElementById("themeLabel");
 
 async function loadTheme() {
-  const stored = await chrome.storage.local.get(["yl_theme"]);
-  const mode = stored.yl_theme || "dark";
+  await migrateKeys();
+  const stored = await chrome.storage.local.get(["hc_theme"]);
+  const mode = stored.hc_theme || "dark";
   if (mode === "light") {
     bodyEl.classList.add("theme-light");
     if (themeIconSpan) themeIconSpan.textContent = "🌙";
@@ -41,7 +52,7 @@ async function toggleTheme() {
     if (themeIconSpan) themeIconSpan.textContent = "☀";
     if (themeLabelSpan) themeLabelSpan.textContent = "Light";
   }
-  await chrome.storage.local.set({ yl_theme: next });
+  await chrome.storage.local.set({ hc_theme: next });
 }
 
 themeToggleBtn?.addEventListener("click", toggleTheme);
@@ -50,10 +61,10 @@ themeToggleBtn?.addEventListener("click", toggleTheme);
 /* External links */
 // =========================
 document.getElementById("bugBtn")?.addEventListener("click", () =>
-  chrome.tabs.create({ url: "https://github.com/YvonLabs/headercheck/issues" })
+  chrome.tabs.create({ url: "https://github.com/yvon-l/headercheck/issues" })
 );
 document.getElementById("siteBtn")?.addEventListener("click", () =>
-  chrome.tabs.create({ url: "https://yvonlabs.github.io" })
+  chrome.tabs.create({ url: "https://kimberly-wood.com/tools/" })
 );
 
 // =========================
@@ -376,7 +387,7 @@ function buildMarkdownReport(url, map, scoreInfo) {
 
 ---
 
-Generated locally with **[HeaderCheck by YvonLabs](https://github.com/YvonLabs/headercheck/)**.
+Generated locally with **[HeaderCheck](https://github.com/yvon-l/headercheck)**.
 `;
 
   return head + rows + foot;

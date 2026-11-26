@@ -1,7 +1,7 @@
 {
   "name": "HeaderCheck",
-  "description": "Local security header audit. Runs offline. Made by YvonLabs.",
-  "version": "0.3.0",
+  "description": "Grades the security headers of the page you are on. Runs locally, sends nothing anywhere.",
+  "version": "0.3.1",
   "manifest_version": 3,
 
   "icons": {

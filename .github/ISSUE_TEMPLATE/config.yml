@@ -1,6 +1,8 @@
 blank_issues_enabled: false
-
 contact_links:
-  - name: 🌐 Visit HeaderCheck website
-    url: https://yvonlabs.github.io/headercheck/
-    about: Learn more about HeaderCheck and YvonLabs projects.
+  - name: About HeaderCheck
+    url: https://kimberly-wood.com/tools/
+    about: What HeaderCheck does and what it stores.
+  - name: Report a security issue privately
+    url: https://github.com/yvon-l/headercheck/security/advisories/new
+    about: Please don't open a public issue for security problems.

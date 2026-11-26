@@ -1,98 +1,65 @@
 <p align="center">
-  <img src="https://yvonlabs.github.io/assets/headercheck_logo.png" alt="HeaderCheck logo" width="280"><br>
-  <b>HeaderCheck – fast, deterministic HTTP header analysis for privacy and security.</b>
+  <img src="images/headercheck_logo.png" alt="HeaderCheck logo" width="280">
 </p>
 
-<p align="center">
-  <a href="https://github.com/YvonLabs/headercheck/releases">
-    <img src="https://img.shields.io/badge/version-0.1.0-blue.svg?style=flat-square" alt="Version">
-  </a>
-  <a href="https://github.com/YvonLabs/headercheck/blob/main/LICENSE">
-    <img src="https://img.shields.io/badge/license-MIT-green.svg?style=flat-square" alt="License">
-  </a>
-  <a href="https://github.com/YvonLabs/headercheck/issues">
-    <img src="https://img.shields.io/github/issues/YvonLabs/headercheck?style=flat-square" alt="Issues">
-  </a>
-  <a href="https://yvonlabs.github.io/docs/headercheck">
-    <img src="https://img.shields.io/badge/docs-yvonlabs.github.io-1E90FF?style=flat-square" alt="Docs">
-  </a>
-</p>
+# HeaderCheck
 
----
+A Chrome extension that checks the security headers on the page you're looking at and gives it a score.
 
-### Overview
+Open it on any page and it reads that page's HTTP response headers, weighs them against a fixed model, and shows a percentage, a letter grade and what's missing. You can copy the result as a Markdown report.
 
-**HeaderCheck** is a Chrome extension that inspects HTTP response headers for the active tab and evaluates a site’s security and privacy posture.
+It all runs in the browser. Nothing gets sent anywhere.
 
-It uses a deterministic **weighted scoring model** (`SCM-2025.1`) to produce a score from **0–100**, based on the presence and validity of key security headers.  
-All processing is performed **locally in the browser** with no remote calls, storage, or telemetry.
+[Chrome Web Store](https://chromewebstore.google.com/detail/headercheck/hpjigpjlgonbnneifjfkgeoghpobcncj) · [What it stores](https://kimberly-wood.com/privacy/#browser-extensions)
 
-Current scoring model: **SCM-2025.1**
+## What it looks at
 
----
+Graded, so they count toward the score:
 
-### Features
+- Content-Security-Policy
+- Strict-Transport-Security
+- Referrer-Policy
+- Permissions-Policy
+- X-Content-Type-Options
+- X-Frame-Options, or `frame-ancestors` in the CSP
 
-- **Deterministic weighted scoring**  
-  Based on a 10-point raw weight model normalized to 100.  
-- **Instant analysis**  
-  One click, one score.  
-- **Clear guidance**  
-  Highlights missing or weak headers.  
-- **Zero telemetry**  
-  Evaluation happens entirely inside Chrome’s extension sandbox.  
-- **EU-aligned privacy emphasis**  
-  Prioritizes transport integrity, referrer minimization, and isolation boundaries.
+Shown but not scored: Cross-Origin-Opener-Policy, Cross-Origin-Embedder-Policy and Cross-Origin-Resource-Policy.
 
----
+The weights are in [docs/scoring-models.md](docs/scoring-models.md).
 
-### What HeaderCheck Evaluates
+## Grades
 
-HeaderCheck focuses on high-impact, modern browser security controls:
+| Score | Grade |
+|-------|-------|
+| 85% and up | A |
+| 70 to 84% | B |
+| 55 to 69% | C |
+| 40 to 54% | D |
+| under 40% | F |
 
-| Header | Purpose |
-|--------|---------|
-| **Strict-Transport-Security** | Prevents downgrade attacks and enforces HTTPS |
-| **Content-Security-Policy** | Strongest browser-side XSS and injection control |
-| **COOP / COEP / CORP** | Context isolation and cross-origin boundary protection |
-| **Permissions-Policy** | Restricts powerful browser APIs |
-| **Referrer-Policy** | Minimizes referrer leakage |
-| **X-Frame-Options / frame-ancestors** | Clickjacking defense |
-| **X-Content-Type-Options (nosniff)** | Prevents MIME sniffing |
+CSP and HSTS matter most. Missing both is an F whatever the percentage. Missing one caps the grade at D unless everything else gets the score to 85%.
 
-Some headers are **graded** (affect score), others are **informational** (shown but not penalized).
+A bad grade means the headers are missing or weak. It doesn't mean the site has a vulnerability.
 
-Full model documentation:  
-https://yvonlabs.github.io/docs/scoring-models
+## What it keeps
 
----
+- The headers for the page in each open tab, in session storage. They go away when you close the tab or the browser. Cookie headers aren't kept at all.
+- Your last 10 scans (address, time, score) and whether you picked light or dark mode, in local storage on your machine. Clear history in the popup deletes the scans.
 
-### Scoring Bands
+## Permissions
 
-HeaderCheck assigns grades based on the final weighted percentage:
+- `webRequest` and access to all sites, to read the response headers for the page
+- `activeTab`, to know which tab you're on
+- `storage`, for what's listed above
 
-| Score | Grade | Meaning |
-|--------|--------|---------|
-| **≥ 85 percent** | A–B | Strong alignment with modern best practices |
-| **< 85 percent** | C–D | Missing or weak required controls |
-| **< 60 percent** | F | High-risk posture with critical gaps |
+## Running it from source
 
-**Critical headers:**  
-Content-Security-Policy and Strict-Transport-Security.
+1. Clone the repo.
+2. Go to `chrome://extensions/` and turn on Developer mode.
+3. Click Load unpacked and pick the folder.
 
----
+## Bugs and security issues
 
-### Installation
+Bugs go in [issues](https://github.com/yvon-l/headercheck/issues). For anything security related, use [private reporting](https://github.com/yvon-l/headercheck/security/advisories/new) instead. More in [SECURITY.md](SECURITY.md).
 
-1. **Clone the repo**
-   ```bash
-   git clone https://github.com/YvonLabs/headercheck.git
-
-   ---
-
-### Support YvonLabs
-
-If you find HeaderCheck helpful, you can support future open-source tools:
-
-☕ https://buymeacoffee.com/yvonlabs
-
+MIT license. Built by K.Y. Wood.
