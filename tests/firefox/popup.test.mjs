@@ -36,13 +36,13 @@ before(async () => {
   srv = await startServer();
   const options = new firefox.Options()
     .setBinary(FIREFOX)
-    .addArguments("-headless", "-remote-allow-system-access")
+    .addArguments("-headless")
     // A fixed internal ID, so the tests know the extension's page addresses.
     .setPreference("extensions.webextensions.uuids", JSON.stringify({ [FIREFOX_ID]: UUID }));
   driver = await new Builder()
     .forBrowser("firefox")
     .setFirefoxOptions(options)
-    .setFirefoxService(new firefox.ServiceBuilder(GECKODRIVER))
+    .setFirefoxService(new firefox.ServiceBuilder(GECKODRIVER).addArguments("--allow-system-access"))
     .build();
   await driver.installAddon(XPI, true);
   await pause(1000);
