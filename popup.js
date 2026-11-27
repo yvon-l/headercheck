@@ -438,7 +438,8 @@ function buildReport(url, map, scoreInfo) {
   const repo = "https://github.com/yvon-l/headercheck";
 
   // Plain text / Markdown: renders cleanly on GitHub, Slack and in notes apps.
-  const cell = v => String(v).replace(/\|/g, "\\|");
+  // Escape backslashes first, so a value ending in "\" can't cancel the pipe escape and split the row.
+  const cell = v => String(v).replace(/\\/g, "\\\\").replace(/\|/g, "\\|");
   const text = [
     `# Security headers: ${mdEscape(host)}`,
     "",
