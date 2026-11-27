@@ -42,6 +42,8 @@ export const PAGES = {
     ["Strict-Transport-Security", "max-age=1"],
   ],
   "/bare": [],
+  // A value with a backslash right before a pipe, to check the report table can't be split.
+  "/pipes": [["Content-Security-Policy", "default-src 'self'; report-uri https://x.test/a\\|b"]],
 };
 
 export function startServer() {

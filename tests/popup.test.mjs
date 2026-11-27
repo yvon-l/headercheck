@@ -120,6 +120,21 @@ test("Copy report puts a formatted table and Markdown on the clipboard, without 
   await r.pop.close();
 });
 
+test("Copy report keeps each Markdown row in its cells, even with a backslash before a pipe", async () => {
+  await goto("/pipes");
+  const r = await openPopup(env);
+  await r.pop.bringToFront();
+  await r.pop.evaluate(() => { navigator.clipboard.write = async items => { window.__clip = items; }; });
+  await r.pop.click("#copyReportBtn");
+  const text = await r.pop.evaluate(async () => (await window.__clip[0].getType("text/plain")).text());
+  const row = text.split("\n").find(l => l.startsWith("| Content-Security-Policy"));
+  assert.ok(row, "CSP row present");
+  // Unescaped pipes: a pipe preceded by an even number of backslashes. Four means three cells.
+  const cuts = [...row.matchAll(/(\\*)\|/g)].filter(m => m[1].length % 2 === 0).length;
+  assert.equal(cuts, 4, row);
+  await r.pop.close();
+});
+
 test("Copy cURL quotes the address so it can't run commands", async () => {
   await goto("/good?x=$(id)");
   const r = await openPopup(env);
