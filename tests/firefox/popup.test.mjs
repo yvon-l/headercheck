@@ -36,7 +36,7 @@ before(async () => {
   srv = await startServer();
   const options = new firefox.Options()
     .setBinary(FIREFOX)
-    .addArguments("-headless")
+    .addArguments("-headless", "-remote-allow-system-access")
     // A fixed internal ID, so the tests know the extension's page addresses.
     .setPreference("extensions.webextensions.uuids", JSON.stringify({ [FIREFOX_ID]: UUID }));
   driver = await new Builder()
@@ -48,9 +48,15 @@ before(async () => {
   await pause(1000);
   webTab = await driver.getWindowHandle();
   // An extension page that stays open, used to talk to the extension.
-  await driver.switchTo().newWindow("tab");
-  helperTab = await driver.getWindowHandle();
-  await driver.get(POPUP);
+  // geckodriver won't navigate to extension pages, so the browser opens it.
+  const before = new Set(await driver.getAllWindowHandles());
+  driver.setContext(firefox.Context.CHROME);
+  await driver.executeScript(`gBrowser.addTab(arguments[0], {
+    triggeringPrincipal: Services.scriptSecurityManager.getSystemPrincipal() })`, POPUP);
+  driver.setContext(firefox.Context.CONTENT);
+  await pause(1000);
+  helperTab = (await driver.getAllWindowHandles()).find(h => !before.has(h));
+  assert.ok(helperTab, "extension page opened");
   await driver.switchTo().window(webTab);
 });
 

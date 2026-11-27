@@ -38,5 +38,8 @@ jobs:
       - run: npm ci
       # Firefox and geckodriver come with GitHub's Ubuntu runner.
       - run: firefox --version && "$GECKOWEBDRIVER/geckodriver" --version
-      # Fails if Firefox wasn't found and the tests were skipped.
-      - run: npm run test:firefox 2>&1 | tee out.txt && grep -q "^# skipped 0" out.txt
+      # Also fails if Firefox wasn't found and the tests were skipped.
+      - shell: bash
+        run: |
+          npm run test:firefox 2>&1 | tee out.txt
+          grep -q "^# fail 0" out.txt && grep -q "^# skipped 0" out.txt
