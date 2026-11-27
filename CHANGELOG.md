@@ -6,6 +6,13 @@ HeaderCheck follows semantic-style versioning during its pre-1.0 phase.
 
 ---
 
+## [0.4.0] - 2026-11-27
+
+### added
+- a Firefox version, built from the same code. `npm run package` makes the Chrome and Firefox store zips from one manifest
+- if access to websites has been turned off (Firefox allows this after install), the popup says HeaderCheck needs it and shows an Allow access button, instead of an empty result
+- tests that run the Firefox build in real Firefox on every push
+
 ## [0.3.2] - 2026-11-27
 
 ### fixed
