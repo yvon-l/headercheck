@@ -677,7 +677,24 @@ async function updateUIFromRecord(record) {
   renderHistory(await loadHistory());
 }
 
+// Firefox lets people turn off an extension's access to websites after
+// installing it. Without it no headers can be read, so ask for it back.
+const ALL_SITES = { origins: ["<all_urls>"] };
+const grantBtn = document.getElementById("grantBtn");
+
+async function hasSiteAccess() {
+  try { return await chrome.permissions.contains(ALL_SITES); }
+  catch { return true; }
+}
+
 async function performScan() {
+  if (!(await hasSiteAccess())) {
+    await updateUIFromRecord(null);
+    grantBtn?.classList.remove("hidden");
+    showStatus("HeaderCheck needs access to websites to read their headers.", 600000);
+    return;
+  }
+  grantBtn?.classList.add("hidden");
   setScanning(true);
   if (statusMsgEl) {
     statusMsgEl.classList.remove("hidden");
@@ -708,6 +725,13 @@ async function performScan() {
 /* Events */
 // =========================
 scanBtn?.addEventListener("click", () => performScan());
+
+// The request has to start straight from the click, with nothing awaited first.
+grantBtn?.addEventListener("click", () => {
+  chrome.permissions.request(ALL_SITES).then(granted => {
+    if (granted) performScan();
+  }).catch(() => showStatus("Couldn't ask for access"));
+});
 
 copyCurlBtn?.addEventListener("click", async () => {
   if (!lastCurl) { showStatus("Nothing to copy"); return; }
