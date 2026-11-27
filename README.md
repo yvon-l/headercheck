@@ -49,7 +49,6 @@ A bad grade means the headers are missing or weak. It doesn't mean the site has 
 ## Permissions
 
 - `webRequest` and access to all sites, to read the response headers for the page
-- `activeTab`, to know which tab you're on
 - `storage`, for what's listed above
 
 ## Running it from source

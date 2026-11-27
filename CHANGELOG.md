@@ -12,6 +12,7 @@ HeaderCheck follows semantic-style versioning during its pre-1.0 phase.
 - page headers now kept in session storage instead of local storage, and removed when the tab closes
 - cookie headers are no longer stored at all
 - on update, removes header data left in local storage by earlier versions
+- removed the activeTab permission, which it never needed
 
 ### changed
 - moved to github.com/yvon-l/headercheck; links in the popup and report updated
