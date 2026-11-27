@@ -6,6 +6,11 @@ HeaderCheck follows semantic-style versioning during its pre-1.0 phase.
 
 ---
 
+## [0.3.2] - 2026-11-27
+
+### fixed
+- Copy report: a header value with a backslash right before a pipe could split a row of the Markdown table into extra cells. Backslashes are now escaped before pipes. Found by CodeQL.
+
 ## [0.3.1] - 2026-11-26
 
 ### fixed
