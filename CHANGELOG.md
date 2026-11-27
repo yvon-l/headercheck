@@ -15,6 +15,8 @@ HeaderCheck follows semantic-style versioning during its pre-1.0 phase.
 - the popup footer showed v0.3.0; it now reads the version from the manifest
 - a header sent more than once is combined instead of keeping only the last copy
 - one missing critical header could raise an F to a D; it now only caps the grade at D
+- a Content-Security-Policy with no script-src or default-src still passes, but now gets a note that it doesn't restrict scripts
+- dropped the High / Medium / Low risk label. Missing headers aren't a vulnerability, so the popup, history and report now show the grade and score only
 - a frame-ancestors directive in a second CSP header is now recognised
 - Copy report pasted as raw Markdown into Docs, Word and email. It now copies a formatted table (with each header's value) for those, and clean Markdown for GitHub, Slack and plain-text editors
 
@@ -27,6 +29,9 @@ HeaderCheck follows semantic-style versioning during its pre-1.0 phase.
 - on update, removes header data left in local storage by earlier versions
 - removed the activeTab permission, which it never needed
 - messages to the background script are only accepted from HeaderCheck itself
+
+### added
+- automated tests in a real Chromium, run on every push
 
 ### model (SCM-2026.1)
 - headers are checked for valid values, not just presence. A header that's sent but doesn't protect anything shows as Weak and scores as missing:

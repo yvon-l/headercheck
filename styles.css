@@ -195,26 +195,21 @@ body {
 .status-label { font-size: 11px; color: var(--text-dim); }
 .status-val { font-size: 12px; font-weight: 600; }
 
-.risk-chip, .grade-chip {
+.grade-chip {
   border-radius: var(--radius-pill);
   border: 1px solid transparent;
   font-weight: 700;
   line-height: 1.2;
+  font-size: 12px;
+  padding: 4px 10px;
+  min-width: 34px;
+  text-align: center;
 }
-.risk-chip { font-size: 11px; padding: 4px 6px; min-width: 60px; text-align: center; }
-.grade-chip { font-size: 11px; padding: 3px 6px; margin-left: 8px; }
 
-/* Risk Colors */
-.risk-low { background: var(--pill-good-bg); color: var(--pill-good-text); }
-.risk-med { background: var(--pill-warn-bg); color: var(--pill-warn-text); }
-.risk-high { background: var(--pill-bad-bg); color: var(--pill-bad-text); }
-
-/* Grade Colors */
-.grade-A { background: #28322b; color: #9adcb5; }
-.grade-B { background: #243235; color: #8dd4e0; }
-.grade-C { background: #3a3124; color: #f7d47c; }
-.grade-D { background: #3a2b23; color: #f1b08a; }
-.grade-F { background: #3b2626; color: #f19b96; }
+/* Grade colors follow the theme's pill colors */
+.grade-A, .grade-B { background: var(--pill-good-bg); color: var(--pill-good-text); }
+.grade-C { background: var(--pill-warn-bg); color: var(--pill-warn-text); }
+.grade-D, .grade-F { background: var(--pill-bad-bg); color: var(--pill-bad-text); }
 
 /* ---------- Headers ---------- */
 .audit-head-row { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
@@ -271,9 +266,6 @@ body {
   border-radius: var(--radius-pill);
   border: 1px solid transparent;
 }
-.history-risk-low { background: var(--pill-good-bg); color: var(--pill-good-text); }
-.history-risk-med { background: var(--pill-warn-bg); color: var(--pill-warn-text); }
-.history-risk-high { background: var(--pill-bad-bg); color: var(--pill-bad-text); }
 
 /* ---------- Inline Status ---------- */
 .status-msg { font-size: 11px; color: var(--text-dim); min-height: 14px; transition: opacity 0.2s ease; }
@@ -340,3 +332,5 @@ body {
   justify-content: center;
   line-height: 1.2;
 }
+
+.header-note { font-size: 11px; margin-top: 3px; color: var(--pill-warn-text); }

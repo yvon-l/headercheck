@@ -116,6 +116,13 @@ const REQUIRED_HEADERS = [
     label: "Content-Security-Policy",
     desc: "Mitigates XSS and injection by restricting which resources can load.",
     check: v => !!String(v || "").trim(),
+    // Passes on presence, but say so when the policy can't stop injected scripts.
+    note: v => {
+      const d = cspDirectives(v);
+      return d.includes("script-src") || d.includes("default-src")
+        ? null
+        : "Present, but it doesn't restrict scripts (no script-src or default-src).";
+    },
     severityIfMissing: "bad",
     weight: 4,
     graded: true
@@ -211,7 +218,6 @@ const scanBtn        = document.getElementById("scanBtn");
 const copyCurlBtn    = document.getElementById("copyCurlBtn");
 const copyReportBtn  = document.getElementById("copyReportBtn");
 
-const riskChipEl     = document.getElementById("riskChip");
 const scoreCountEl   = document.getElementById("scoreCount");
 const scoreTotalEl   = document.getElementById("scoreTotal");
 const scorePctEl     = document.getElementById("scorePct");
@@ -279,6 +285,14 @@ function renderHeaders(map) {
     left.appendChild(t);
     left.appendChild(d);
 
+    const note = ok && h.note ? h.note(map[h.name]) : null;
+    if (note) {
+      const n = document.createElement("div");
+      n.className = "header-note";
+      n.textContent = note;
+      left.appendChild(n);
+    }
+
     const pill = document.createElement("div");
     pill.className = `header-status-pill ${s.cls}`;
     pill.textContent = s.text;
@@ -322,22 +336,12 @@ function computeWeightedScore(map) {
   const percent =
     sumWeights > 0 ? Math.round((sumOkWeights / sumWeights) * 100) : 0;
 
-  let risk = "Low";
-  let cls = "risk-low";
-  if (percent < 60) { risk = "High"; cls = "risk-high"; }
-  else if (percent < 85) { risk = "Medium"; cls = "risk-med"; }
-
-  if (badMissing >= 2) { risk = "High"; cls = "risk-high"; }
-  else if (badMissing === 1 && percent < 85) { risk = "High"; cls = "risk-high"; }
-
   return {
     okCount,
     totalCount: gradedCount,
     percent,
     badMissing,
     warnMissing,
-    risk,
-    cls
   };
 }
 
@@ -373,10 +377,6 @@ function renderRisk(scoreInfo) {
     gradeChipEl.className = `grade-chip ${gradeClass(grade)}`;
   }
 
-  if (riskChipEl) {
-    riskChipEl.textContent = scoreInfo.risk;
-    riskChipEl.className = `risk-chip ${scoreInfo.cls}`;
-  }
 }
 
 function shellQuote(str) {
@@ -412,13 +412,15 @@ function reportRows(map) {
     const present = value !== undefined;
     const graded = h.graded !== false;
     const ok = h.check(value, map);
-    const result = ok ? "OK" : present ? "Weak" : "Missing";
+    const note = ok && h.note ? h.note(value) : null;
+    const result = ok ? (note ? "OK, with a note" : "OK") : present ? "Weak" : "Missing";
     return {
       label: h.label,
       result: graded ? result : `${result} (not scored)`,
-      tone: !graded ? "info" : ok ? "ok" : (h.severityIfMissing === "bad" ? "bad" : "warn"),
+      tone: !graded ? "info" : ok ? (note ? "warn" : "ok") : (h.severityIfMissing === "bad" ? "bad" : "warn"),
+      note,
       value: present ? shorten(value) : "",
-      why: h.desc
+      why: note ? `${h.desc} ${note}` : h.desc
     };
   });
 }
@@ -440,7 +442,7 @@ function buildReport(url, map, scoreInfo) {
   const text = [
     `# Security headers: ${mdEscape(host)}`,
     "",
-    `Grade ${grade} · ${scoreInfo.percent}% · ${scoreInfo.okCount} of ${scoreInfo.totalCount} headers pass · ${scoreInfo.risk} risk`,
+    `Grade ${grade} · ${scoreInfo.percent}% · ${scoreInfo.okCount} of ${scoreInfo.totalCount} headers pass`,
     "",
     `URL: ${mdEscape(url)}`,
     `Scanned: ${when}`,
@@ -459,7 +461,7 @@ function buildReport(url, map, scoreInfo) {
   const html = `
 <div style="font-family:Arial,Helvetica,sans-serif;font-size:11pt;color:#16181d;">
   <h2 style="margin:0 0 4px 0;font-size:16pt;">Security headers: ${htmlEscape(host)}</h2>
-  <p style="margin:0 0 10px 0;"><b>Grade ${htmlEscape(grade)}</b> · ${scoreInfo.percent}% · ${scoreInfo.okCount} of ${scoreInfo.totalCount} headers pass · ${htmlEscape(scoreInfo.risk)} risk</p>
+  <p style="margin:0 0 10px 0;"><b>Grade ${htmlEscape(grade)}</b> · ${scoreInfo.percent}% · ${scoreInfo.okCount} of ${scoreInfo.totalCount} headers pass</p>
   <p style="margin:0 0 12px 0;color:#5a5f6b;">URL: ${htmlEscape(url)}<br>Scanned: ${htmlEscape(when)}</p>
   <table style="border-collapse:collapse;font-size:10pt;">
     <tr style="background:#f4f3ef;">
@@ -596,13 +598,9 @@ function renderHistory(arr) {
     left.appendChild(timeEl);
 
     const pill = document.createElement("div");
-    pill.className =
-      `history-risk-pill ${
-        scoreInfo.cls === "risk-low" ? "history-risk-low"
-      : scoreInfo.cls === "risk-med" ? "history-risk-med"
-      : "history-risk-high"
-      }`;
-    pill.textContent = scoreInfo.risk;
+    const hGrade = gradeFor(scoreInfo.percent || 0, scoreInfo.badMissing || 0);
+    pill.className = `history-risk-pill ${gradeClass(hGrade)}`;
+    pill.textContent = `${hGrade} · ${scoreInfo.percent ?? 0}%`;
 
     top.appendChild(left);
     top.appendChild(pill);
@@ -649,8 +647,6 @@ async function updateUIFromRecord(record) {
       percent: 0,
       badMissing: 0,
       warnMissing: 0,
-      risk: "–",
-      cls: ""
     });
     // Nothing was graded, so don't show a grade or score.
     if (gradeChipEl) { gradeChipEl.textContent = "–"; gradeChipEl.className = "grade-chip"; }

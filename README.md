@@ -61,6 +61,18 @@ It reads them as the page loads, so it grades exactly what your browser got. If 
 2. Go to `chrome://extensions/` and turn on Developer mode.
 3. Click Load unpacked and pick the folder.
 
+## Tests
+
+The tests load the extension into a real Chromium and check it against a local server with known headers: grading, Weak values, the CSP note, re-requests and bot checks, history, Copy report and Copy cURL, and the upgrade from 0.3.0. They run on every push.
+
+```
+npm ci
+npx playwright install chromium
+npm test
+```
+
+You don't need any of this to use or load the extension.
+
 ## Bugs and security issues
 
 Bugs go in [issues](https://github.com/yvon-l/headercheck/issues). For anything security related, use [private reporting](https://github.com/yvon-l/headercheck/security/advisories/new) instead. More in [SECURITY.md](SECURITY.md).

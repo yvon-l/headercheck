@@ -48,17 +48,9 @@ Then two overrides for the critical headers:
 - both fail: F
 - one fails: D at most (a score that would be an F stays an F)
 
-## Risk
-
-| Condition | Risk |
-|-----------|------|
-| Score under 60%, or both critical headers fail, or one fails and the score is under 85% | High |
-| 60 to 84% | Medium |
-| 85% and up | Low |
-
 ## What it doesn't do
 
-It checks that each header is there and set to something that protects. It doesn't judge how strong a Content-Security-Policy is: a policy with only `upgrade-insecure-requests` passes, even though it does nothing against script injection. A good grade means the basic headers are in place, not that the site is secure, and a bad grade doesn't mean the site has a vulnerability.
+It checks that each header is there and set to something that protects. It doesn't grade how strong a Content-Security-Policy is. A policy with no `script-src` or `default-src` (for example only `frame-ancestors` and `upgrade-insecure-requests`) still passes, but the popup and the report add a note that it doesn't restrict scripts. A good grade means the basic headers are in place, not that the site is secure, and a bad grade doesn't mean the site has a vulnerability.
 
 ## Where the headers come from
 
