@@ -48,12 +48,8 @@ before(async () => {
   await pause(1000);
   webTab = await driver.getWindowHandle();
   // An extension page that stays open, used to talk to the extension.
-  // geckodriver won't navigate to extension pages, so the browser opens it.
   const before = new Set(await driver.getAllWindowHandles());
-  driver.setContext(firefox.Context.CHROME);
-  await driver.executeScript(`gBrowser.addTab(arguments[0], {
-    triggeringPrincipal: Services.scriptSecurityManager.getSystemPrincipal() })`, POPUP);
-  driver.setContext(firefox.Context.CONTENT);
+  await openExtensionTab(POPUP);
   await pause(1000);
   helperTab = (await driver.getAllWindowHandles()).find(h => !before.has(h));
   assert.ok(helperTab, "extension page opened");
@@ -81,31 +77,46 @@ async function inHelper(fn, ...args) {
   return out;
 }
 
-// Open the real popup, as a background tab so the page stays the active tab,
-// and read what it shows.
+// Open an extension page in a background tab. geckodriver won't navigate to
+// extension pages itself, and switching to a tab would make it the active one,
+// so the browser opens it without selecting it.
+async function openExtensionTab(url) {
+  driver.setContext(firefox.Context.CHROME);
+  try {
+    await driver.executeScript(`gBrowser.addTab(arguments[0], {
+      triggeringPrincipal: Services.scriptSecurityManager.getSystemPrincipal() })`, url);
+  } finally {
+    driver.setContext(firefox.Context.CONTENT);
+  }
+}
+
+// Open the real popup with the test page as the active tab, let it scan, then
+// read what it shows from the helper page.
 async function openPopup() {
   await driver.switchTo().window(webTab);
-  const before = new Set(await driver.getAllWindowHandles());
-  await inHelper(url => chrome.tabs.create({ url, active: false }).then(() => true), POPUP);
-  const handle = (await driver.getAllWindowHandles()).find(h => !before.has(h));
-  await driver.switchTo().window(handle);
+  await openExtensionTab(POPUP);
   await pause(1500);
-  const r = await driver.executeScript(() => ({
-    grade: document.querySelector("#gradeChip").textContent,
-    score: document.querySelector("#scorePct").textContent,
-    passing: document.querySelector("#scoreCount").textContent,
-    url: document.querySelector("#currentUrl").textContent,
-    status: document.querySelector("#statusMsg").textContent,
-    version: document.querySelector("#aboutVersion").textContent,
-    grantShown: !document.querySelector("#grantBtn").classList.contains("hidden"),
-    rows: Object.fromEntries([...document.querySelectorAll(".header-row-item")].map(e => [
-      e.querySelector(".header-name").textContent,
-      e.querySelector(".header-status-pill").textContent,
-    ])),
-  }));
-  await driver.close();
-  await driver.switchTo().window(webTab);
-  return r;
+  return inHelper(() => {
+    const view = chrome.extension.getViews({ type: "tab" })
+      .find(w => w !== window && w.location.pathname === "/popup.html");
+    if (!view) return Promise.resolve({ error: "popup not found" });
+    const d = view.document;
+    const r = {
+      grade: d.querySelector("#gradeChip").textContent,
+      score: d.querySelector("#scorePct").textContent,
+      passing: d.querySelector("#scoreCount").textContent,
+      url: d.querySelector("#currentUrl").textContent,
+      status: d.querySelector("#statusMsg").textContent,
+      version: d.querySelector("#aboutVersion").textContent,
+      grantShown: !d.querySelector("#grantBtn").classList.contains("hidden"),
+      rows: Object.fromEntries([...d.querySelectorAll(".header-row-item")].map(e => [
+        e.querySelector(".header-name").textContent,
+        e.querySelector(".header-status-pill").textContent,
+      ])),
+    };
+    view.close();
+    return Promise.resolve(r);
+  });
 }
 
 test("all six headers set correctly grade A in Firefox", { skip }, async () => {
