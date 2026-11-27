@@ -270,6 +270,8 @@ body {
 /* ---------- Inline Status ---------- */
 .status-msg { font-size: 11px; color: var(--text-dim); min-height: 14px; transition: opacity 0.2s ease; }
 .status-msg.hidden { opacity: 0; }
+#grantBtn { margin-top: 6px; }
+#grantBtn.hidden { display: none; }
 
 /* ---------- Footer ---------- */
 .about-left { display: flex; align-items: center; gap: 6px; color: var(--text-dim); font-size: 11px; }
