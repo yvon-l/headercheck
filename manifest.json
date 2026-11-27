@@ -1,16 +1,14 @@
 {
   "name": "HeaderCheck",
-  "description": "Grades the security headers of the page you are on. Runs locally, sends nothing anywhere.",
+  "description": "Grades the security headers of the page you are on. Runs in your browser, with no tracking or accounts.",
   "version": "0.3.1",
   "manifest_version": 3,
-
   "icons": {
     "16": "icons/headercheck16.png",
     "32": "icons/headercheck32.png",
     "48": "icons/headercheck48.png",
     "128": "icons/headercheck128.png"
   },
-
   "action": {
     "default_title": "HeaderCheck",
     "default_popup": "popup.html",
@@ -20,18 +18,16 @@
       "48": "icons/headercheck_toolbar_48.png"
     }
   },
-
   "permissions": [
     "storage",
     "webRequest"
   ],
-
   "host_permissions": [
     "<all_urls>"
   ],
-
   "background": {
     "service_worker": "background.js",
     "type": "module"
-  }
+  },
+  "minimum_chrome_version": "102"
 }

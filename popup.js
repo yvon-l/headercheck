@@ -15,6 +15,13 @@ async function migrateKeys() {
   if (old.yl_theme) next.hc_theme = old.yl_theme;
   if (Object.keys(next).length) await chrome.storage.local.set(next);
   await chrome.storage.local.remove(["yl_history", "yl_theme"]);
+
+  // Older versions saved full addresses in history. Strip query strings and fragments.
+  const { hc_history } = await chrome.storage.local.get("hc_history");
+  if (Array.isArray(hc_history)) {
+    const cleaned = hc_history.map(e => ({ ...e, url: historyUrl(e.url) }));
+    await chrome.storage.local.set({ hc_history: cleaned });
+  }
 }
 
 // =========================
@@ -73,13 +80,42 @@ document.getElementById("siteBtn")?.addEventListener("click", () =>
 //   graded: true  -> counts for score and grade
 //           false -> informational only
 // =========================
+// =========================
+// Header validation (scoring model SCM-2026.1)
+// =========================
+function cspDirectives(csp) {
+  return String(csp || "")
+    .split(/[;,]/) // ";" separates directives, "," separates repeated policies
+    .map(d => d.trim().toLowerCase())
+    .filter(Boolean)
+    .map(d => d.split(/\s+/)[0]);
+}
+
+function hstsValid(v) {
+  const m = /max-age\s*=\s*"?(\d+)"?/i.exec(String(v || ""));
+  return !!m && Number(m[1]) > 0;
+}
+
+function xfoValid(v) {
+  const t = String(v || "").trim().toLowerCase();
+  return t === "deny" || t === "sameorigin";
+}
+
+function referrerValid(v) {
+  // Browsers use the last policy they recognise in a comma-separated list.
+  const tokens = String(v || "").split(",").map(t => t.trim().toLowerCase()).filter(Boolean);
+  if (!tokens.length) return false;
+  const last = tokens[tokens.length - 1];
+  return last !== "unsafe-url" && last !== "no-referrer-when-downgrade";
+}
+
 const REQUIRED_HEADERS = [
   // 1. Core, heavily weighted and graded
   {
     name: "content-security-policy",
     label: "Content-Security-Policy",
     desc: "Mitigates XSS and injection by restricting which resources can load.",
-    check: v => !!v,
+    check: v => !!String(v || "").trim(),
     severityIfMissing: "bad",
     weight: 4,
     graded: true
@@ -88,7 +124,7 @@ const REQUIRED_HEADERS = [
     name: "strict-transport-security",
     label: "Strict-Transport-Security",
     desc: "Forces HTTPS; protects against downgrade or mitm after first visit.",
-    check: v => !!v,
+    check: v => hstsValid(v),
     severityIfMissing: "bad",
     weight: 4,
     graded: true
@@ -97,11 +133,8 @@ const REQUIRED_HEADERS = [
     name: "x-frame-options",
     label: "X-Frame-Options / frame-ancestors",
     desc: "Mitigates clickjacking by controlling iframing or embedding.",
-    check: (v, headers) => {
-      if (v) return true;
-      const csp = headers["content-security-policy"] || "";
-      return csp.toLowerCase().includes("frame-ancestors");
-    },
+    check: (v, headers) =>
+      xfoValid(v) || cspDirectives(headers["content-security-policy"]).includes("frame-ancestors"),
     severityIfMissing: "warn",
     weight: 3,
     graded: true
@@ -112,7 +145,7 @@ const REQUIRED_HEADERS = [
     name: "x-content-type-options",
     label: "X-Content-Type-Options",
     desc: "Prevents MIME sniffing; avoids executing untrusted files as scripts.",
-    check: v => typeof v === "string" && v.toLowerCase().includes("nosniff"),
+    check: v => String(v || "").trim().toLowerCase() === "nosniff",
     severityIfMissing: "warn",
     weight: 1,
     graded: true
@@ -121,7 +154,7 @@ const REQUIRED_HEADERS = [
     name: "referrer-policy",
     label: "Referrer-Policy",
     desc: "Reduces referrer leakage when navigating across sites.",
-    check: v => !!v,
+    check: v => referrerValid(v),
     severityIfMissing: "warn",
     weight: 1,
     graded: true
@@ -130,7 +163,7 @@ const REQUIRED_HEADERS = [
     name: "permissions-policy",
     label: "Permissions-Policy",
     desc: "Controls access to powerful APIs like camera, mic, or geo.",
-    check: v => !!v,
+    check: v => !!String(v || "").trim(),
     severityIfMissing: "warn",
     weight: 1,
     graded: true
@@ -199,10 +232,15 @@ let statusClearTimer = null;
 // =========================
 // UI helpers
 // =========================
-function classifyStatus(ok, sev, graded) {
+function classifyStatus(ok, sev, graded, present) {
   // This only controls styling, not scoring
   if (ok) {
     return { cls: "ok", text: "OK" };
+  }
+
+  // Sent, but with a value that doesn't protect anything (e.g. max-age=0)
+  if (present) {
+    return { cls: "weak", text: "Weak" };
   }
 
   // Informational headers: softer style but still "Missing"
@@ -222,7 +260,7 @@ function renderHeaders(map) {
   REQUIRED_HEADERS.forEach(h => {
     const ok = h.check(map[h.name], map);
     const graded = h.graded === false ? false : true;
-    const s = classifyStatus(ok, h.severityIfMissing, graded);
+    const s = classifyStatus(ok, h.severityIfMissing, graded, map[h.name] !== undefined);
 
     const row = document.createElement("div");
     row.className = "header-row-item";
@@ -305,12 +343,14 @@ function computeWeightedScore(map) {
 
 function gradeFor(percent, badMissing) {
   if (badMissing >= 2) return "F";
-  if (badMissing === 1 && percent < 85) return "D";
-  if (percent >= 85) return "A";
-  if (percent >= 70) return "B";
-  if (percent >= 55) return "C";
-  if (percent >= 40) return "D";
-  return "F";
+  const grade =
+    percent >= 85 ? "A" :
+    percent >= 70 ? "B" :
+    percent >= 55 ? "C" :
+    percent >= 40 ? "D" : "F";
+  // One critical header failing caps the grade at D. It never raises an F.
+  if (badMissing === 1 && grade !== "F") return "D";
+  return grade;
 }
 
 function gradeClass(grade) {
@@ -339,65 +379,126 @@ function renderRisk(scoreInfo) {
   }
 }
 
+function shellQuote(str) {
+  return "'" + String(str).replace(/'/g, "'\\''") + "'";
+}
+
 function buildCurl(url) {
-  return `curl -I "${url}"`;
+  return `curl -sI ${shellQuote(url)}`;
 }
 
-// Markdown report
-function buildMarkdownReport(url, map, scoreInfo) {
-  const date = new Date();
-  const when = date.toLocaleString(undefined, {
-    year: "numeric", month: "short", day: "numeric",
-    hour: "2-digit", minute: "2-digit"
-  });
+// Escape characters that would let a URL change the Markdown around it.
+function mdEscape(str) {
+  return String(str).replace(/[\\`*_[\]<>|]/g, ch => "\\" + ch);
+}
 
+// =========================
+// Report (copied as formatted HTML for Docs, Word and email, plus Markdown text)
+// =========================
+function htmlEscape(str) {
+  return String(str)
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+
+function shorten(str, max = 140) {
+  const s = String(str).replace(/\s+/g, " ").trim();
+  return s.length > max ? s.slice(0, max - 1) + "…" : s;
+}
+
+function reportRows(map) {
+  return REQUIRED_HEADERS.map(h => {
+    const value = map[h.name];
+    const present = value !== undefined;
+    const graded = h.graded !== false;
+    const ok = h.check(value, map);
+    const result = ok ? "OK" : present ? "Weak" : "Missing";
+    return {
+      label: h.label,
+      result: graded ? result : `${result} (not scored)`,
+      tone: !graded ? "info" : ok ? "ok" : (h.severityIfMissing === "bad" ? "bad" : "warn"),
+      value: present ? shorten(value) : "",
+      why: h.desc
+    };
+  });
+}
+
+function buildReport(url, map, scoreInfo) {
+  const when = new Date().toLocaleString(undefined, {
+    year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit"
+  });
   const grade = gradeFor(scoreInfo.percent, scoreInfo.badMissing);
+  // Reports get shared, so leave out query strings, which can hold tokens.
+  url = historyUrl(url) || url;
+  let host = url;
+  try { host = new URL(url).hostname; } catch { /* keep url */ }
+  const rows = reportRows(map);
+  const repo = "https://github.com/yvon-l/headercheck";
 
-  const head =
-`# HeaderCheck Report
+  // Plain text / Markdown: renders cleanly on GitHub, Slack and in notes apps.
+  const cell = v => String(v).replace(/\|/g, "\\|");
+  const text = [
+    `# Security headers: ${mdEscape(host)}`,
+    "",
+    `Grade ${grade} · ${scoreInfo.percent}% · ${scoreInfo.okCount} of ${scoreInfo.totalCount} headers pass · ${scoreInfo.risk} risk`,
+    "",
+    `URL: ${mdEscape(url)}`,
+    `Scanned: ${when}`,
+    "",
+    "| Header | Result | Value |",
+    "|---|---|---|",
+    ...rows.map(r => `| ${cell(r.label)} | ${cell(r.result)} | ${r.value ? "`" + cell(r.value).replace(/`/g, "'") + "`" : ""} |`),
+    "",
+    `Weak means the header is sent but its value doesn't protect anything. Made with HeaderCheck: ${repo}`,
+    ""
+  ].join("\n");
 
-**URL:** ${url}  
-**Scan Date:** ${when}  
-**Risk Level:** ${scoreInfo.risk}  
-**Passing:** ${scoreInfo.okCount} / ${scoreInfo.totalCount} (${scoreInfo.percent}%)  
-**Grade:** ${grade}
+  // Formatted version: inline styles, because Docs and email clients drop stylesheets.
+  const colors = { ok: "#1e7a46", warn: "#9a6700", bad: "#b42318", info: "#5a5f6b" };
+  const td = "padding:6px 10px;border:1px solid #d9d6cc;vertical-align:top;";
+  const html = `
+<div style="font-family:Arial,Helvetica,sans-serif;font-size:11pt;color:#16181d;">
+  <h2 style="margin:0 0 4px 0;font-size:16pt;">Security headers: ${htmlEscape(host)}</h2>
+  <p style="margin:0 0 10px 0;"><b>Grade ${htmlEscape(grade)}</b> · ${scoreInfo.percent}% · ${scoreInfo.okCount} of ${scoreInfo.totalCount} headers pass · ${htmlEscape(scoreInfo.risk)} risk</p>
+  <p style="margin:0 0 12px 0;color:#5a5f6b;">URL: ${htmlEscape(url)}<br>Scanned: ${htmlEscape(when)}</p>
+  <table style="border-collapse:collapse;font-size:10pt;">
+    <tr style="background:#f4f3ef;">
+      <th style="${td}text-align:left;">Header</th>
+      <th style="${td}text-align:left;">Result</th>
+      <th style="${td}text-align:left;">Value</th>
+      <th style="${td}text-align:left;">Why it matters</th>
+    </tr>
+    ${rows.map(r => `<tr>
+      <td style="${td}white-space:nowrap;"><b>${htmlEscape(r.label)}</b></td>
+      <td style="${td}white-space:nowrap;color:${colors[r.tone]};"><b>${htmlEscape(r.result)}</b></td>
+      <td style="${td}font-family:Consolas,Menlo,monospace;font-size:9pt;">${htmlEscape(r.value)}</td>
+      <td style="${td}">${htmlEscape(r.why)}</td>
+    </tr>`).join("")}
+  </table>
+  <p style="margin:10px 0 0 0;font-size:9pt;color:#5a5f6b;">Weak means the header is sent but its value doesn't protect anything. Made with <a href="${repo}">HeaderCheck</a>.</p>
+</div>`;
 
----
-
-## 🧩 Header Summary
-
-| Header | Status | Why it matters |
-|:--|:--:|:--|
-`;
-
-  let rows = "";
-  REQUIRED_HEADERS.forEach(h => {
-    const ok = h.check(map[h.name], map);
-    const sev = h.severityIfMissing;
-    const graded = h.graded === false ? false : true;
-    const statusIcon = ok
-      ? "🟢 Present"
-      : graded
-        ? (sev === "bad" ? "🔴 Missing" : "🟡 Missing")
-        : "ℹ Info (not scored)";
-    rows += `| **${h.label}** | ${statusIcon} | ${h.desc}${graded ? "" : " (informational; not scored)"} |\n`;
-  });
-
-  const foot = `
-
----
-
-Generated locally with **[HeaderCheck](https://github.com/yvon-l/headercheck)**.
-`;
-
-  return head + rows + foot;
+  return { html, text };
 }
 
-function showStatus(msg) {
+async function copyReport(report) {
+  if (window.ClipboardItem && navigator.clipboard?.write) {
+    await navigator.clipboard.write([
+      new ClipboardItem({
+        "text/html": new Blob([report.html], { type: "text/html" }),
+        "text/plain": new Blob([report.text], { type: "text/plain" })
+      })
+    ]);
+  } else {
+    await navigator.clipboard.writeText(report.text);
+  }
+}
+
+function showStatus(msg, ms = 3000) {
   if (statusClearTimer) clearTimeout(statusClearTimer);
   statusMsgEl.textContent = msg;
   statusMsgEl.classList.remove("hidden");
-  statusClearTimer = setTimeout(() => statusMsgEl.classList.add("hidden"), 3000);
+  statusClearTimer = setTimeout(() => statusMsgEl.classList.add("hidden"), ms);
 }
 
 function flashButton(btn, orig, txt = "Copied") {
@@ -430,6 +531,13 @@ function formatTimestamp(ts) {
 // =========================
 // History
 // =========================
+// History keeps only the origin and path, never query strings or fragments,
+// which can hold tokens (password reset links, session IDs and so on).
+function historyUrl(url) {
+  try { const u = new URL(url); return u.origin + u.pathname; }
+  catch { return ""; }
+}
+
 async function loadHistory() {
   const s = await chrome.storage.local.get([HC_HISTORY_KEY]);
   return s[HC_HISTORY_KEY] || [];
@@ -511,10 +619,16 @@ function renderHistory(arr) {
 function fetchLatestFromBackground() {
   return new Promise(resolve => {
     chrome.runtime.sendMessage({ type: "getLatestForActiveTab" }, resp => {
-      resolve(resp && resp.ok ? (resp.data || null) : null);
+      resolve(resp || { ok: false, error: "scan-failed" });
     });
   });
 }
+
+const SCAN_ERRORS = {
+  "unsupported-page": "HeaderCheck can only scan http and https pages.",
+  "fetch-failed": "Couldn't reach this page to read its headers.",
+  "no-active-tab": "No active tab to scan."
+};
 
 // =========================
 // UI update cycle
@@ -538,6 +652,11 @@ async function updateUIFromRecord(record) {
       risk: "–",
       cls: ""
     });
+    // Nothing was graded, so don't show a grade or score.
+    if (gradeChipEl) { gradeChipEl.textContent = "–"; gradeChipEl.className = "grade-chip"; }
+    if (scorePctEl) scorePctEl.textContent = "–";
+    if (scoreCountEl) scoreCountEl.textContent = "–";
+    lastScoreInfo = null;
     renderHistory(await loadHistory());
     return;
   }
@@ -557,7 +676,7 @@ async function updateUIFromRecord(record) {
   if (pageScanTimeEl) pageScanTimeEl.textContent =
     `Last scanned: ${formatTimestamp(ts)}`;
 
-  await appendHistoryEntry({ url, ts, scoreInfo: info });
+  await appendHistoryEntry({ url: historyUrl(url), ts, scoreInfo: info });
   renderHistory(await loadHistory());
 }
 
@@ -569,12 +688,16 @@ async function performScan() {
   }
   try {
     await new Promise(r => setTimeout(r, 150));
-    const rec = await fetchLatestFromBackground();
-    if (!rec) {
+    const resp = await fetchLatestFromBackground();
+    if (!resp.ok || !resp.data) {
       await updateUIFromRecord(null);
-      showStatus("No headers captured");
+      showStatus(SCAN_ERRORS[resp.error] || "Scan failed");
+    } else if (resp.data.redirected) {
+      // Grading the login or bot-check page would be wrong, so show no grade.
+      await updateUIFromRecord(null);
+      showStatus("This site sent the check to a different page (often a login or bot check). Reload the page, then scan.", 10000);
     } else {
-      await updateUIFromRecord(rec);
+      await updateUIFromRecord(resp.data);
       showStatus("Scanned just now");
     }
   } catch {
@@ -606,8 +729,7 @@ copyReportBtn?.addEventListener("click", async () => {
     return;
   }
   try {
-    const md = buildMarkdownReport(lastUrl, lastHeadersMap, lastScoreInfo);
-    await navigator.clipboard.writeText(md);
+    await copyReport(buildReport(lastUrl, lastHeadersMap, lastScoreInfo));
     flashButton(copyReportBtn, "Copy report", "Copied");
     showStatus("Report copied");
   } catch {
@@ -623,6 +745,8 @@ clearHistoryBtn?.addEventListener("click", async () => {
 // Init
 // =========================
 (async function init() {
+  const versionEl = document.getElementById("aboutVersion");
+  if (versionEl) versionEl.textContent = "v" + chrome.runtime.getManifest().version;
   await loadTheme();
   renderHistory(await loadHistory());
   performScan();
